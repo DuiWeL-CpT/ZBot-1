@@ -332,16 +332,10 @@ class Admin(_command.Command):
     @commands.check(checker.is_allowed_in_current_guild_channel)
     async def check_recruitments(
             self, context,
-            after: converter.to_datetime = converter.to_datetime('1970-01-01'),
-            limit: int = 100,
-            add_reaction=True):
-        if limit < 1:
-            raise exceptions.UndersizedArgument(limit, 1)
-        if (utils.get_current_time() - after).total_seconds() <= 0:
-            argument_size = converter.humanize_datetime(after)
-            max_argument_size = converter.humanize_datetime(utils.get_current_time())
-            raise exceptions.OversizedArgument(argument_size, max_argument_size)
-
+            after: converter.to_past_datetime = converter.to_datetime('1970-01-01'),
+            limit: converter.to_positive_int = 100,
+            add_reaction=True
+    ):
         add_reaction and await context.message.add_reaction(self.WORK_IN_PROGRESS_EMOJI)
 
         recruitment_channel = self.guild.get_channel(self.RECRUITMENT_CHANNEL_ID)
@@ -457,29 +451,31 @@ class Admin(_command.Command):
         """Check that no announce is re-posted before a given timespan."""
         zbot.db.update_recruitment_announces(await channel.history().flatten())
 
-        # Get records of all deleted announces.
-        # Still existing announce handled by Admin.check_recruitment_announces_uniqueness
-        announces_data_by_author = {}
+        # Get records of all deleted announces
+        # Still existing announces are handled by Admin.check_recruitment_announces_uniqueness
+        author_last_announce_data = {}
         for announce_data in zbot.db.load_recruitment_announces_data(
             query={'_id': {'$nin': list(map(lambda a: a.id, announces))}},
             order=[('time', -1)],
         ):
-            announces_data_by_author.setdefault(announce_data['author'], []).append(
-                {'time': announce_data['time'], 'message_id': announce_data['_id']}
-            )
+            # Associate each author with his/her last delete announce data
+            if announce_data['author'] not in author_last_announce_data:
+                author_last_announce_data[announce_data['author']] = {
+                    'time': announce_data['time'], 'message_id': announce_data['_id']
+                }
 
-        # Find all existing announces that have the same author as a recent, but deleted, announce
+        # Find all existing announces that have the same author as a recent (but deleted) announce
         min_timespan = datetime.timedelta(
-            # Apply a tolerance of 2 days for players interpreting the 30 days range as "one month"
+            # Apply a tolerance of 2 days for players interpreting the 30 days range as "one month".
+            # This is a soustraction because the resulting value is the number of days to wait before posting again.
             days=Admin.MIN_RECRUITMENT_ANNOUNCE_TIMESPAN - Admin.RECRUITMENT_ANNOUNCE_TIMESPAN_TOLERANCE
         )
         before_timespan_announces = []
         for announce in announces:
-            for announce_data in announces_data_by_author.get(announce.author.id, []):
+            if announce_data := author_last_announce_data.get(announce.author.id):
                 previous_announce_time = announce_data['time']
-                if previous_announce_time + min_timespan > announce.created_at:
+                if previous_announce_time <= announce.created_at < previous_announce_time + min_timespan:
                     before_timespan_announces.append((announce, previous_announce_time))
-                    break  # Only check based on the most recent deleted announce
         if before_timespan_announces:
             for block in utils.make_message_blocks([
                 f"L'annonce de {announce.author.mention} a été postée avant le délai minimum de "

@@ -2,7 +2,6 @@ import datetime
 import typing
 
 import discord
-import emojis
 from discord.ext import commands
 
 from zbot import checker
@@ -80,7 +79,7 @@ class Poll(_command.Command):
             description: str,
             dest_channel: discord.TextChannel,
             emoji_list: converter.to_emoji_list,
-            time: converter.to_datetime,
+            time: converter.to_future_datetime,
             *, options=""
     ):
         # Check arguments
@@ -88,13 +87,6 @@ class Poll(_command.Command):
             raise exceptions.ForbiddenChannel(dest_channel)
         if not emoji_list:
             raise commands.MissingRequiredArgument(context.command.params['emoji_list'])
-        for emoji in emoji_list:
-            if isinstance(emoji, str) and emojis.emojis.count(emoji) != 1:
-                raise exceptions.ForbiddenEmoji(emoji)
-        if (time - utils.get_current_time()).total_seconds() <= 0:
-            argument_size = converter.humanize_datetime(time)
-            min_argument_size = converter.humanize_datetime(utils.get_current_time())
-            raise exceptions.UndersizedArgument(argument_size, min_argument_size)
         do_announce = utils.is_option_enabled(options, 'do-announce')
         do_pin = utils.is_option_enabled(options, 'pin')
         if do_announce or do_pin:
@@ -137,7 +129,6 @@ class Poll(_command.Command):
 
         # Confirm command
         await context.send(f"Sondage d'identifiant `{poll_data['poll_id']}` programmé : <{message.jump_url}>.")
-        await context.send(f"Sondage démarré.")
 
     @staticmethod
     def build_announce_embed(
@@ -444,9 +435,6 @@ class Poll(_command.Command):
             raise exceptions.ForbiddenChannel(channel)
         if not emoji_list:
             raise commands.MissingRequiredArgument(context.command.params['emoji_list'])
-        for emoji in emoji_list:
-            if isinstance(emoji, str) and emojis.emojis.count(emoji) != 1:
-                raise exceptions.ForbiddenEmoji(emoji)
         required_role_name = utils.get_option_value(options, 'role')
         if required_role_name:
             utils.try_get(  # Raise if role does not exist
@@ -537,7 +525,7 @@ class Poll(_command.Command):
     async def time(
             self, context: commands.Context,
             poll_id: int,
-            time: converter.to_datetime
+            time: converter.to_future_datetime
     ):
         message, channel, emoji_list, is_exclusive, required_role_name, _, organizer = \
             await self.get_message_env(poll_id, raise_if_not_found=True)
@@ -546,10 +534,6 @@ class Poll(_command.Command):
             checker.has_any_mod_role(context, print_error=True)
         if not context.author.permissions_in(channel).send_messages:
             raise exceptions.ForbiddenChannel(channel)
-        if (time - utils.get_current_time()).total_seconds() <= 0:
-            argument_size = converter.humanize_datetime(time)
-            min_argument_size = converter.humanize_datetime(utils.get_current_time())
-            raise exceptions.UndersizedArgument(argument_size, min_argument_size)
 
         embed = self.build_announce_embed(
             message.embeds[0].description, is_exclusive, required_role_name, organizer, time,
@@ -633,9 +617,6 @@ class Poll(_command.Command):
             dest_channel: discord.TextChannel = None,
             *, options=""
     ):
-        for emoji in emoji_list:
-            if isinstance(emoji, str) and emojis.emojis.count(emoji) != 1:
-                raise exceptions.ForbiddenEmoji(emoji)
         if dest_channel and not context.author.permissions_in(dest_channel).send_messages:
             raise exceptions.ForbiddenChannel(dest_channel)
         is_exclusive = utils.is_option_enabled(options, 'exclusive')

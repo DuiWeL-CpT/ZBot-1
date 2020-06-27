@@ -124,7 +124,7 @@ class MongoDBConnector:
         for pending_job_data in self.database[collection_name].find({}, dict.fromkeys(data_keys, 1)):
             pending_jobs_data[pending_job_data['message_id']] = pending_job_data
         logger.debug(
-            f"Loaded {len(pending_jobs_data)} pending data from collection {collection_name}: {pending_jobs_data}"
+            f"Loaded {len(pending_jobs_data)} pending job data from collection {collection_name}: {pending_jobs_data}"
         )
         return pending_jobs_data
 

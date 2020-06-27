@@ -3,7 +3,6 @@ import random
 import typing
 
 import discord
-import emojis
 from discord.ext import commands
 
 from zbot import checker
@@ -75,22 +74,14 @@ class Lottery(_command.Command):
             self, context: commands.Context,
             announce: str,
             dest_channel: discord.TextChannel,
-            emoji: typing.Union[discord.Emoji, str],
-            nb_winners: int,
-            time: converter.to_datetime,
+            emoji: converter.to_emoji,
+            nb_winners: converter.to_positive_int,
+            time: converter.to_future_datetime,
             *, options=""
     ):
         # Check arguments
         if not context.author.permissions_in(dest_channel).send_messages:
             raise exceptions.ForbiddenChannel(dest_channel)
-        if isinstance(emoji, str) and emojis.emojis.count(emoji) != 1:
-            raise exceptions.ForbiddenEmoji(emoji)
-        if nb_winners < 1:
-            raise exceptions.UndersizedArgument(nb_winners, 1)
-        if (time - utils.get_current_time()).total_seconds() <= 0:
-            argument_size = converter.humanize_datetime(time)
-            min_argument_size = converter.humanize_datetime(utils.get_current_time())
-            raise exceptions.UndersizedArgument(argument_size, min_argument_size)
 
         # Run command
         organizer = context.author
@@ -339,18 +330,12 @@ class Lottery(_command.Command):
     )
     @commands.check(checker.has_any_user_role)
     @commands.check(checker.is_allowed_in_current_guild_channel)
-    async def emoji(
-            self, context: commands.Context,
-            lottery_id: int,
-            emoji: typing.Union[discord.Emoji, str]
-    ):
+    async def emoji(self, context: commands.Context, lottery_id: int, emoji: converter.to_emoji):
         message, channel, previous_emoji, nb_winners, time, organizer = \
             await self.get_message_env(lottery_id, raise_if_not_found=True)
 
         if context.author != organizer:
             checker.has_any_mod_role(context, print_error=True)
-        if isinstance(emoji, str) and emojis.emojis.count(emoji) != 1:
-            raise exceptions.ForbiddenEmoji(emoji)
 
         previous_reaction = utils.try_get(
             message.reactions, error=exceptions.MissingEmoji(previous_emoji), emoji=previous_emoji
@@ -416,17 +401,13 @@ class Lottery(_command.Command):
     async def time(
             self, context: commands.Context,
             lottery_id: int,
-            time: converter.to_datetime
+            time: converter.to_future_datetime
     ):
         message, channel, emoji, nb_winners, _, organizer = \
             await self.get_message_env(lottery_id, raise_if_not_found=True)
 
         if context.author != organizer:
             checker.has_any_mod_role(context, print_error=True)
-        if (time - utils.get_current_time()).total_seconds() <= 0:
-            argument_size = converter.humanize_datetime(time)
-            min_argument_size = converter.humanize_datetime(utils.get_current_time())
-            raise exceptions.UndersizedArgument(argument_size, min_argument_size)
 
         embed = self.build_announce_embed(emoji, nb_winners, organizer, time, self.guild.roles)
         await message.edit(embed=embed)
@@ -454,15 +435,13 @@ class Lottery(_command.Command):
     async def winners(
             self, context: commands.Context,
             lottery_id: int,
-            nb_winners: int
+            nb_winners: converter.to_positive_int
     ):
         message, channel, emoji, _, time, organizer = \
             await self.get_message_env(lottery_id, raise_if_not_found=True)
 
         if context.author != organizer:
             checker.has_any_mod_role(context, print_error=True)
-        if nb_winners < 1:
-            raise exceptions.UndersizedArgument(nb_winners, 1)
 
         embed = self.build_announce_embed(emoji, nb_winners, organizer, time, self.guild.roles)
         await message.edit(embed=embed)
@@ -492,7 +471,7 @@ class Lottery(_command.Command):
             error=exceptions.MissingMessage(lottery_data['message_id'])
             if raise_if_not_found else None
         )
-        emoji = utils.try_get_emoji(lottery_data['emoji_code'], zbot.bot.emojis, error=None)  # TODO cancel lottery if not found
+        emoji = utils.try_get_emoji(zbot.bot.emojis, lottery_data['emoji_code'], error=None)  # TODO cancel lottery if not found
         nb_winners = lottery_data['nb_winners']
         time = converter.from_timestamp(lottery_data['next_run_time'])
         organizer = zbot.bot.get_user(lottery_data['organizer_id'])
@@ -537,16 +516,12 @@ class Lottery(_command.Command):
             self, context: commands.Context,
             src_channel: discord.TextChannel,
             message_id: int,
-            emoji: typing.Union[discord.Emoji, str] = None,
-            nb_winners: int = 1,
+            emoji: converter.to_emoji = None,
+            nb_winners: converter.to_positive_int = 1,
             dest_channel: discord.TextChannel = None,
             organizer: discord.User = None,
             seed: int = None
     ):
-        if emoji and isinstance(emoji, str) and emojis.emojis.count(emoji) != 1:
-            raise exceptions.ForbiddenEmoji(emoji)
-        if nb_winners < 1:
-            raise exceptions.UndersizedArgument(nb_winners, 1)
         if dest_channel and not context.author.permissions_in(dest_channel).send_messages:
             raise exceptions.ForbiddenChannel(dest_channel)
 
